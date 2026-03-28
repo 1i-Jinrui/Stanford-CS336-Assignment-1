@@ -4,6 +4,9 @@ from collections import defaultdict
 import pickle
 import time
 from tqdm import tqdm
+import cProfile
+import pstats
+import io
 
 
 
@@ -50,12 +53,25 @@ def _get_token_freq(input_path: str | os.PathLike, special_tokens: list[str]) ->
     return token_freq_table
 
 
-def _get_initial_pair_counts(token_freq_table: dict[tuple[bytes, ...], int]) -> dict[tuple[bytes, bytes], int]:
+
+# def _get_initial_pair_counts(token_freq_table: dict[tuple[bytes, ...], int]) -> dict[tuple[bytes, bytes], int]:
+#     pair_counts: dict[tuple[bytes, bytes], int] = defaultdict(int)
+#     for token, freq in token_freq_table.items():
+#         for i in range(len(token) - 1):
+#             pair_counts[(token[i], token[i + 1])] += freq
+#     return pair_counts
+
+
+# 更新版,同时获得pair_to_words
+def _get_initial_pair_counts_and_idx(token_freq_table: dict[tuple[bytes, ...], int]) -> (
+        tuple)[dict[tuple[bytes, bytes], int], dict[tuple[bytes, bytes], set[tuple[bytes, ...]]]]:
     pair_counts: dict[tuple[bytes, bytes], int] = defaultdict(int)
-    for token, freq in token_freq_table.items():
-        for i in range(len(token) - 1):
-            pair_counts[(token[i], token[i + 1])] += freq
-    return pair_counts
+    pair_to_words: dict[tuple[bytes, bytes], set[tuple[bytes, ...]]] = defaultdict(set)
+    for token_seq, freq in token_freq_table.items():
+        for i in range(len(token_seq) - 1):
+            pair_counts[(token_seq[i], token_seq[i + 1])] += freq
+            pair_to_words[(token_seq[i], token_seq[i + 1])].add(token_seq)
+    return pair_counts, pair_to_words
 
 
 def merge_token_sequence(token_seq: tuple[bytes, ...],
@@ -96,7 +112,7 @@ def train_bpe(input_path: str | os.PathLike,
     token_freq_table = _get_token_freq(input_path, special_tokens)
 
     # 3. 初始化 token 对频率表
-    pair_counts = _get_initial_pair_counts(token_freq_table)
+    pair_counts, pair_to_words = _get_initial_pair_counts_and_idx(token_freq_table)
 
     merges: list[tuple[bytes, bytes]] = []
 
@@ -113,29 +129,38 @@ def train_bpe(input_path: str | os.PathLike,
         max_pairs = [k for k, v in pair_counts.items() if v == max_pair_freq]
         candidate_pair = max(max_pairs)
 
+
         merges.append(candidate_pair)
         new_vocab = candidate_pair[0] + candidate_pair[1]
         vocab[current_next_id] = new_vocab
         current_next_id += 1
 
         # 查找受此次合并影响的 token 序列
-        affected_token_seqs = []
-        for token_seq, freq in token_freq_table.items():
-            has_pair = any(
-                (token_seq[i], token_seq[i + 1]) == candidate_pair
-                for i in range(len(token_seq) - 1)
-            )
-            if has_pair:
-                affected_token_seqs.append((token_seq, freq))
+        # affected_token_seqs = []
+        # for token_seq, freq in token_freq_table.items():
+        #     has_pair = any(
+        #         (token_seq[i], token_seq[i + 1]) == candidate_pair
+        #         for i in range(len(token_seq) - 1)
+        #     )
+        #     if has_pair:
+        #         affected_token_seqs.append((token_seq, freq))
+        affected_token_seqs = list(pair_to_words[candidate_pair])
 
         # 更新全局状态表
         # 减去旧的pair_counts计数
-        for token_seq, freq in affected_token_seqs:
+        for token_seq in affected_token_seqs:
+            freq = token_freq_table[token_seq]
             for i in range(len(token_seq) - 1):
                 pair = (token_seq[i], token_seq[i + 1])
                 pair_counts[pair] -= freq
                 if pair_counts[pair] == 0:
                     del pair_counts[pair]
+
+                # 从倒排索引中划掉旧序列的名字
+                if token_seq in pair_to_words[pair]:
+                    pair_to_words[pair].remove(token_seq)
+                    if not pair_to_words[pair]:
+                        del pair_to_words[pair]
 
             new_seq = merge_token_sequence(token_seq, candidate_pair, new_vocab)
 
@@ -143,6 +168,7 @@ def train_bpe(input_path: str | os.PathLike,
             for i in range(len(new_seq) - 1):
                 new_pair = (new_seq[i], new_seq[i + 1])
                 pair_counts[new_pair] += freq
+                pair_to_words[new_pair].add(new_seq)
 
             # 更新token_freq_table
             del token_freq_table[token_seq]
@@ -167,7 +193,27 @@ def train_bpe(input_path: str | os.PathLike,
 
 if __name__ == "__main__":
     special_tokens = ["<|endoftext|>"]
+
+    # 1. 创建 Profile 实例
+    pr = cProfile.Profile()
+
+    # 2. 开启分析
+    pr.enable()
+
+    # 运行你的核心功能
     vocab_result, merges_result = train_bpe("../data/TinyStoriesV2-GPT4-valid.txt", 10000, special_tokens)
+
+    # 3. 停止分析
+    pr.disable()
+
+    # 4. 格式化并打印结果
+    s = io.StringIO()
+    # sort_stats 可以按不同指标排序，'cumtime' 是按累计耗时排序，'tottime' 是按函数自身耗时排序
+    ps = pstats.Stats(pr, stream=s).sort_stats('cumtime')
+
+    # 打印最耗时的前 20 个函数调用
+    ps.print_stats(20)
+    print(s.getvalue())
 
     print(f"Vocab size: {len(vocab_result)}")
     print(f"Merges count: {len(merges_result)}")
