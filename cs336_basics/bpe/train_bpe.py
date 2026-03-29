@@ -26,33 +26,76 @@ def _initialize_vocab(vocab_size: int, special_tokens: list[str]) -> tuple[dict[
     return vocab, current_next_id
 
 
+# def _get_token_freq(input_path: str | os.PathLike, special_tokens: list[str]) -> dict[tuple[bytes, ...], int]:
+#     token_freq_table: dict[tuple[bytes, ...], int] = defaultdict(int)
+#     try:
+#         with open(input_path, 'r', encoding='utf-8', errors='ignore') as f:
+#             text = f.read()
+#     except FileNotFoundError:
+#         return token_freq_table
+#     if not text:
+#         return token_freq_table
+#
+#     if special_tokens:
+#         pattern = '|'.join(map(regex.escape, special_tokens))
+#         chunks = regex.split(pattern, text)
+#     else:
+#         chunks = [text]
+#     # 定义微观分割（预分词）正则表达式
+#     PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+#
+#     for chunk in chunks:
+#         words = regex.findall(PAT, chunk)
+#         for word in words:
+#             word_bytes = word.encode('utf-8')
+#             bytes_tuple = tuple(bytes([x]) for x in word_bytes)
+#             token_freq_table[bytes_tuple] += 1
+#     return token_freq_table
+
+# 更新版，加入pattern预编译以及流式读取text
 def _get_token_freq(input_path: str | os.PathLike, special_tokens: list[str]) -> dict[tuple[bytes, ...], int]:
     token_freq_table: dict[tuple[bytes, ...], int] = defaultdict(int)
+
+    # 提前编译正则表达式，大幅提升匹配速度
+    PAT = regex.compile(r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
+
+    # 获取文件总大小，用于显示读取进度
     try:
-        with open(input_path, 'r', encoding='utf-8', errors='ignore') as f:
-            text = f.read()
+        total_size = os.path.getsize(input_path)
     except FileNotFoundError:
-        return token_freq_table
-    if not text:
         return token_freq_table
 
     if special_tokens:
-        pattern = '|'.join(map(regex.escape, special_tokens))
-        chunks = regex.split(pattern, text)
+        # 编译 special tokens 的正则模式
+        st_pattern = regex.compile('|'.join(map(regex.escape, special_tokens)))
     else:
-        chunks = [text]
-    # 定义微观分割（预分词）正则表达式
-    PAT = r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+"""
+        st_pattern = None
 
-    for chunk in chunks:
-        words = regex.findall(PAT, chunk)
-        for word in words:
-            word_bytes = word.encode('utf-8')
-            bytes_tuple = tuple(bytes([x]) for x in word_bytes)
-            token_freq_table[bytes_tuple] += 1
+    with open(input_path, 'r', encoding='utf-8', errors='ignore') as f:
+        # 使用文件大小来驱动进度条
+        with tqdm(total=total_size, unit='B', unit_scale=True, desc="Reading & Pre-tokenizing") as pbar:
+            for line in f:
+                line_bytes_len = len(line.encode('utf-8'))
+
+                if st_pattern:
+                    chunks = st_pattern.split(line)
+                else:
+                    chunks = [line]
+
+                for chunk in chunks:
+                    if not chunk:
+                        continue
+                    # 使用预编译的正则进行查找
+                    words = PAT.findall(chunk)
+                    for word in words:
+                        word_bytes = word.encode('utf-8')
+                        bytes_tuple = tuple(bytes([x]) for x in word_bytes)
+                        token_freq_table[bytes_tuple] += 1
+
+                # 更新读取进度
+                pbar.update(line_bytes_len)
+
     return token_freq_table
-
-
 
 # def _get_initial_pair_counts(token_freq_table: dict[tuple[bytes, ...], int]) -> dict[tuple[bytes, bytes], int]:
 #     pair_counts: dict[tuple[bytes, bytes], int] = defaultdict(int)
@@ -193,27 +236,8 @@ def train_bpe(input_path: str | os.PathLike,
 
 if __name__ == "__main__":
     special_tokens = ["<|endoftext|>"]
-
-    # 1. 创建 Profile 实例
-    pr = cProfile.Profile()
-
-    # 2. 开启分析
-    pr.enable()
-
     # 运行你的核心功能
-    vocab_result, merges_result = train_bpe("../data/TinyStoriesV2-GPT4-valid.txt", 10000, special_tokens)
-
-    # 3. 停止分析
-    pr.disable()
-
-    # 4. 格式化并打印结果
-    s = io.StringIO()
-    # sort_stats 可以按不同指标排序，'cumtime' 是按累计耗时排序，'tottime' 是按函数自身耗时排序
-    ps = pstats.Stats(pr, stream=s).sort_stats('cumtime')
-
-    # 打印最耗时的前 20 个函数调用
-    ps.print_stats(20)
-    print(s.getvalue())
+    vocab_result, merges_result = train_bpe("../data/TinyStoriesV2-GPT4-train.txt", 10000, special_tokens)
 
     print(f"Vocab size: {len(vocab_result)}")
     print(f"Merges count: {len(merges_result)}")
