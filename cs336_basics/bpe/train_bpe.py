@@ -149,10 +149,11 @@ def train_bpe(input_path: str | os.PathLike,
         raise ValueError("special_tokens must be a list")
 
     # 1.初始化词表
-    vocab, current_next_id = _initialize_vocab(vocab_size, special_tokens)
+    sorted_special_tokens = sorted(special_tokens, key=len, reverse=True)
+    vocab, current_next_id = _initialize_vocab(vocab_size, sorted_special_tokens)
 
     # 2. 读取语料并预分词，获取词频表
-    token_freq_table = _get_token_freq(input_path, special_tokens)
+    token_freq_table = _get_token_freq(input_path, sorted_special_tokens)
 
     # 3. 初始化 token 对频率表
     pair_counts, pair_to_words = _get_initial_pair_counts_and_idx(token_freq_table)
@@ -221,12 +222,31 @@ def train_bpe(input_path: str | os.PathLike,
 
     pbar.close()
 
-    # 储存
-    with open("vocab.pkl", "wb") as f:
-        pickle.dump(vocab, f)
+    # ================= 保存为人类可读的格式 =================
 
-    with open("merges.pkl", "wb") as f:
-        pickle.dump(merges, f)
+    # 1. 保存 Vocab 为 JSON 文件
+    import json
+    readable_vocab = {}
+    for idx, token_bytes in vocab.items():
+        # 将 bytes 安全地解码为字符串，遇到非法 utf-8 序列用 \x.. 替代
+        safe_string = token_bytes.decode('utf-8', errors='backslashreplace')
+        readable_vocab[str(idx)] = safe_string
+
+    with open("vocab.json", "w", encoding="utf-8") as f:
+        # indent=2 使 JSON 文件具有缩进和换行，ensure_ascii=False 保证正常显示中文/特殊字符
+        json.dump(readable_vocab, f, indent=2, ensure_ascii=False)
+
+    # 2. 保存 Merges 为 TXT 文件
+    with open("merges.txt", "w", encoding="utf-8") as f:
+        # 第一行通常写一个版本号标识，Hugging Face 的 merges.txt 通常包含这行
+        f.write("# version: 0.2\n")
+        for pair in merges:
+            part1 = pair[0].decode('utf-8', errors='backslashreplace')
+            part2 = pair[1].decode('utf-8', errors='backslashreplace')
+            # 使用空格分隔合并的两个部分
+            f.write(f"{part1} {part2}\n")
+
+    # ========================================================
 
     end_time = time.time()
     print(f"\nTotal training time: {end_time - start_time:.2f} seconds")
@@ -236,8 +256,7 @@ def train_bpe(input_path: str | os.PathLike,
 
 if __name__ == "__main__":
     special_tokens = ["<|endoftext|>"]
-    # 运行你的核心功能
-    vocab_result, merges_result = train_bpe("../data/TinyStoriesV2-GPT4-train.txt", 10000, special_tokens)
+    vocab_result, merges_result = train_bpe("../data/owt_train.txt", 32000, special_tokens)
 
     print(f"Vocab size: {len(vocab_result)}")
     print(f"Merges count: {len(merges_result)}")

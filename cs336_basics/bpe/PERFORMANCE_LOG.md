@@ -35,3 +35,8 @@
 ### 3. 优化后结果 (Results)
 * **总耗时**: 1187.06 秒
 
+运行owt_train.txt 11637.34 seconds
+待优化《pre-tokenizer多进程处理》
+
+# Tokenizer 性能优化日志
+当前平均吞吐量：179,802 tokens/second
