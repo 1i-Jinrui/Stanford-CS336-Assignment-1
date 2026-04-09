@@ -1,13 +1,14 @@
 import os
 import regex
-from collections import defaultdict
+from collections import defaultdict, Counter
 import pickle
 import time
 from tqdm import tqdm
 import cProfile
-import pstats
 import io
-
+from concurrent.futures import ProcessPoolExecutor, as_completed
+from functools import partial
+from typing import BinaryIO
 
 
 def _initialize_vocab(vocab_size: int, special_tokens: list[str]) -> tuple[dict[int, bytes], int]:
@@ -18,7 +19,7 @@ def _initialize_vocab(vocab_size: int, special_tokens: list[str]) -> tuple[dict[
     for st in special_tokens:
         if len(vocab) >= vocab_size:
             break
-        st_bytes = bytes(st, 'utf-8')
+        st_bytes = st.encode('utf-8')
         if st_bytes not in existing_vocab_values:
             vocab[current_next_id] = st_bytes
             current_next_id += 1
@@ -97,6 +98,142 @@ def _get_token_freq(input_path: str | os.PathLike, special_tokens: list[str]) ->
 
     return token_freq_table
 
+
+def find_chunk_boundaries(
+        file: BinaryIO,
+        desired_num_chunks: int,
+        split_special_token: bytes,
+) -> list[int]:
+    """
+    寻找文件安全的字节切分边界，保证不切断 Token
+    """
+    assert isinstance(split_special_token, bytes), "Must represent special token as a bytestring"
+    # 用指针获取文件大小
+    # 接收两个参数（偏移量，基准位置）：把指针移到文件最末尾
+    file.seek(0, os.SEEK_END)
+
+    # 获取当前指针的位置（既然在最末尾，这个位置的值就是文件的总字节数）
+    file_size = file.tell()
+
+    # 把指针重新移回文件开头
+    file.seek(0)
+
+    if file_size == 0:
+        return [0, 0]
+
+    chunk_size = file_size // desired_num_chunks
+
+    # 初始化边界猜测位置
+    chunk_boundaries = [i * chunk_size for i in range(desired_num_chunks + 1)]
+    chunk_boundaries[-1] = file_size
+
+    mini_chunk_size = 4096  # 每次预读 4KB 寻找边界
+
+    for bi in range(1, len(chunk_boundaries) - 1):
+        initial_position = chunk_boundaries[bi]
+        file.seek(initial_position)
+        while True:
+            mini_chunk = file.read(mini_chunk_size)
+
+            if mini_chunk == b"":
+                chunk_boundaries[bi] = file_size
+                break
+
+            found_at = mini_chunk.find(split_special_token)
+            if found_at != -1:
+                # 找到特殊的 token，将边界定在这个 token 的起始位置
+                chunk_boundaries[bi] = initial_position + found_at
+                break
+            initial_position += mini_chunk_size
+
+    # 可能会找到两个相同的边界，需要去重
+    return sorted(set(chunk_boundaries))
+
+
+def _process_chunk_by_offset(start: int, end: int, input_path: str, special_tokens: list[str]) -> Counter:
+    """
+    子进程执行的预分词任务：根据起始和结束偏移量，自己去硬盘读取数据
+    """
+    local_freq = Counter()
+
+    # 子进程独立打开文件并精确读取
+    with open(input_path, 'rb') as f:
+        f.seek(start)
+        chunk_bytes = f.read(end - start)
+
+    text = chunk_bytes.decode('utf-8', errors='ignore')
+
+    # 将 Windows 的 CRLF (\r\n) 换行符统一规范化为 LF (\n)
+    text = text.replace('\r', '')
+    if not text:
+        return local_freq
+
+    # 子进程内编译正则
+    PAT = regex.compile(r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
+    st_pattern = regex.compile('|'.join(map(regex.escape, special_tokens))) if special_tokens else None
+
+    chunks = st_pattern.split(text) if st_pattern else [text]
+    for chunk in chunks:
+        if not chunk: continue
+        words = PAT.findall(chunk)
+        local_freq.update(
+            tuple(bytes([x]) for x in word.encode('utf-8'))
+            for word in words
+        )
+
+    return local_freq
+
+
+def _get_token_freq_parallel(input_path: str, special_tokens: list[str], num_workers: int = None):
+    """
+    多进程调度：只负责计算边界并下发坐标，不传输数据
+    """
+    if num_workers is None:
+        num_workers = max(1, (os.cpu_count() or 4) - 1)
+
+    total_freq_table = Counter()
+
+    try:
+        total_file_size = os.path.getsize(input_path)
+    except FileNotFoundError:
+        return total_freq_table
+
+    # 确定用于切分的 token（如果是纯文本且无特殊 token，退化为按换行符切分以保证安全）
+    split_token = b"<|endoftext|>" if special_tokens else b"\n"
+
+    # 多切分一些 chunk 以实现更好的负载均衡，防止OOM
+    desired_chunks = num_workers * 24
+
+    # 计算块的边界
+    with open(input_path, "rb") as f:
+        boundaries = find_chunk_boundaries(f, desired_chunks, split_token)
+
+    # 派发坐标任务
+    worker_func = partial(_process_chunk_by_offset, input_path=input_path, special_tokens=special_tokens)
+
+    with ProcessPoolExecutor(max_workers=num_workers) as executor, \
+            tqdm(total=total_file_size, unit='B', unit_scale=True, desc="Pre-tokenizing") as pbar:
+
+        futures = {}
+
+        # 提交所有的 (start, end) 任务给子进程
+        for start, end in zip(boundaries[:-1], boundaries[1:]):
+            if end <= start:
+                continue
+            future = executor.submit(worker_func, start, end)
+            futures[future] = end - start
+
+        # 收集结果
+        for future in as_completed(futures):
+            chunk_bytes = futures[future]
+            chunk_table = future.result()
+
+            total_freq_table.update(chunk_table)
+            pbar.update(chunk_bytes)
+
+    return total_freq_table
+
+
 # def _get_initial_pair_counts(token_freq_table: dict[tuple[bytes, ...], int]) -> dict[tuple[bytes, bytes], int]:
 #     pair_counts: dict[tuple[bytes, bytes], int] = defaultdict(int)
 #     for token, freq in token_freq_table.items():
@@ -106,8 +243,8 @@ def _get_token_freq(input_path: str | os.PathLike, special_tokens: list[str]) ->
 
 
 # 更新版,同时获得pair_to_words
-def _get_initial_pair_counts_and_idx(token_freq_table: dict[tuple[bytes, ...], int]) -> (
-        tuple)[dict[tuple[bytes, bytes], int], dict[tuple[bytes, bytes], set[tuple[bytes, ...]]]]:
+def _get_initial_pair_counts_and_idx(token_freq_table: dict[tuple[bytes, ...], int]) -> tuple[
+    dict[tuple[bytes, bytes], int], dict[tuple[bytes, bytes], set[tuple[bytes, ...]]]]:
     pair_counts: dict[tuple[bytes, bytes], int] = defaultdict(int)
     pair_to_words: dict[tuple[bytes, bytes], set[tuple[bytes, ...]]] = defaultdict(set)
     for token_seq, freq in token_freq_table.items():
@@ -153,7 +290,7 @@ def train_bpe(input_path: str | os.PathLike,
     vocab, current_next_id = _initialize_vocab(vocab_size, sorted_special_tokens)
 
     # 2. 读取语料并预分词，获取词频表
-    token_freq_table = _get_token_freq(input_path, sorted_special_tokens)
+    token_freq_table = _get_token_freq_parallel(input_path, sorted_special_tokens, num_workers=4)
 
     # 3. 初始化 token 对频率表
     pair_counts, pair_to_words = _get_initial_pair_counts_and_idx(token_freq_table)
@@ -172,7 +309,6 @@ def train_bpe(input_path: str | os.PathLike,
         max_pair_freq = max(pair_counts.values())
         max_pairs = [k for k, v in pair_counts.items() if v == max_pair_freq]
         candidate_pair = max(max_pairs)
-
 
         merges.append(candidate_pair)
         new_vocab = candidate_pair[0] + candidate_pair[1]
@@ -222,7 +358,7 @@ def train_bpe(input_path: str | os.PathLike,
 
     pbar.close()
 
-    # ================= 保存为人类可读的格式 =================
+    # ================= 保存为可读的格式 =================
 
     # 1. 保存 Vocab 为 JSON 文件
     import json
