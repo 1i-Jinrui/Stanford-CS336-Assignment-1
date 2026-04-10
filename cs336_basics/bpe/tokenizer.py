@@ -16,9 +16,10 @@ class Tokenizer:
         self.merges_priority_map = {pair: i for i, pair in enumerate(self.merges)}
         # 将字节转换为token id，避免直接使用vocab字典
         self.bytes_to_id = {v: k for k, v in self.vocab.items()}
-        # 按照长度降序排序，确保更长的符号（例如"<|eot|><|eot|>") 在更短的符号（例如"<|eot|>")之前被匹配
-        sorted_special_tokens = sorted(self.special_tokens, key=len, reverse=True)
+        # 添加一个字典，存储：单词字符串 -> Token IDs 列表，遇到重复的词即可直接取出，不需要再BPE合并
+        self.cache: dict[str, list[int]] = {}
         if self.special_tokens:
+            # 按照长度降序排序，确保更长的符号（例如"<|eot|><|eot|>") 在更短的符号（例如"<|eot|>")之前被匹配
             sorted_special_tokens = sorted(self.special_tokens, key=len, reverse=True)
             special_token_pattern = '|'.join(map(regex.escape, sorted_special_tokens))
             # 提前编译好正则对象
@@ -26,38 +27,48 @@ class Tokenizer:
         else:
             self.special_regex = None
 
-    def _get_bpe_merges(self, piece: bytes) -> list[bytes]:
+    def _get_bpe_ids(self, word: str) -> list[int]:
         """
-        对于每一个非特殊符号的字节段word，例如"hello" 进行BPE编码，返回一个字节列表
+        接收字符串文本片段，直接返回 token ids 列表。结合缓存使用。
         """
-        # 首先将字节段piece转换为单字节列表
-        parts = [bytes([b]) for b in piece]
+        if word in self.cache:
+            return self.cache[word]
+
+        # 首先将word转换为单字节列表
+        parts = [bytes([b]) for b in word.encode('utf-8')]
+
         while len(parts) > 1:
             # 记录所有合并对
-            pairs = set()
+            best_rank = float('inf')
+            best_pair = None
+
             for i in range(len(parts) - 1):
                 pair = (parts[i], parts[i + 1])
-                if pair in self.merges_priority_map:
-                    pairs.add(pair)
+                # 如果 pair 在字典里，.get返回对应的排名,如果不在，返回 None
+                rank = self.merges_priority_map.get(pair)
+                if rank is not None and rank < best_rank:
+                    best_rank = rank
+                    best_pair = pair
 
-            if not pairs:
-                break  # 如果剩下的合并对都不在merges字典中，就表示没有应该合并的合并对了，直接返回
-
-            # 找到最佳合并对
-            best_pair = min(pairs, key=lambda pair: self.merges_priority_map[pair])
+            # 如果没有任何 pair 在 merges 中，说明无法继续合并
+            if best_pair is None:
+                break
 
             # 应用最佳合并对
+            merged_token = best_pair[0] + best_pair[1]
             new_parts = []
             i = 0
             while i < len(parts):
                 if i < len(parts) - 1 and (parts[i], parts[i + 1]) == best_pair:
-                    new_parts.append(parts[i] + parts[i + 1])
+                    new_parts.append(merged_token)
                     i += 2
                 else:
                     new_parts.append(parts[i])
                     i += 1
             parts = new_parts
-        return parts
+        ids = [self.bytes_to_id[x] for x in parts]
+        self.cache[word] = ids
+        return ids
 
     def encode(self, text: str) -> list[int]:
         if not text:
@@ -79,17 +90,14 @@ class Tokenizer:
                 final_ids.append(self.bytes_to_id[chunk.encode('utf-8')])
             else:
                 # 如果chunk是普通文本，使用BPE算法处理
-                # 首先，使用PAT正则表达式将chunk分割为"单词"
-                for word in PAT.findall(chunk):
-                    if not word:
-                        continue
+                # 使用finditer，防止长文本造成OOM
+                for match in PAT.finditer(chunk):
+                    word = match.group()
 
                     # 获取word的合并字节片段
-                    merged_pieces = self._get_bpe_merges(word.encode('utf-8'))
+                    ids = self._get_bpe_ids(word)
+                    final_ids.extend(ids)
 
-                    # 将每个片段转换为token id
-                    for piece in merged_pieces:
-                        final_ids.append(self.bytes_to_id[piece])
         return final_ids
 
     def encode_iterable(self, iterable: Iterable[str]) -> Iterator[int]:
