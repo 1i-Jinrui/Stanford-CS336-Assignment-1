@@ -243,8 +243,8 @@ def _get_token_freq_parallel(input_path: str, special_tokens: list[str], num_wor
 
 
 # 更新版,同时获得pair_to_words
-def _get_initial_pair_counts_and_idx(token_freq_table: dict[tuple[bytes, ...], int]) -> tuple[
-    dict[tuple[bytes, bytes], int], dict[tuple[bytes, bytes], set[tuple[bytes, ...]]]]:
+def _get_initial_pair_counts_and_idx(token_freq_table: dict[tuple[bytes, ...], int])\
+        -> tuple[dict[tuple[bytes, bytes], int], dict[tuple[bytes, bytes], set[tuple[bytes, ...]]]]:
     pair_counts: dict[tuple[bytes, bytes], int] = defaultdict(int)
     pair_to_words: dict[tuple[bytes, bytes], set[tuple[bytes, ...]]] = defaultdict(set)
     for token_seq, freq in token_freq_table.items():
@@ -326,7 +326,7 @@ def train_bpe(input_path: str | os.PathLike,
         #         affected_token_seqs.append((token_seq, freq))
         affected_token_seqs = list(pair_to_words[candidate_pair])
 
-        # 更新全局状态表
+        # 更新全局状态表 针对每一条受影响的token序列，删除对应状态，合成新序列，添加新序列的状态
         # 减去旧的pair_counts计数
         for token_seq in affected_token_seqs:
             freq = token_freq_table[token_seq]

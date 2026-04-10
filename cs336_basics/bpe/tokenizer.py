@@ -44,7 +44,7 @@ class Tokenizer:
 
             for i in range(len(parts) - 1):
                 pair = (parts[i], parts[i + 1])
-                # 如果 pair 在字典里，.get返回对应的排名,如果不在，返回 None
+                # 如果 pair 在字典里，.get返回对应的排名，如果不在，返回 None
                 rank = self.merges_priority_map.get(pair)
                 if rank is not None and rank < best_rank:
                     best_rank = rank

@@ -210,7 +210,7 @@ if __name__ == "__main__":
     print(f"  吞吐量: {single_throughput:,.0f} tokens/second")
 
     # --- 批量测试 ---
-    num_runs = 5
+    num_runs = 100
     total_tokens = 0
     total_time = 0.0
 
