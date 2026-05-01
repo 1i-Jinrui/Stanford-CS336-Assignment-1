@@ -5,6 +5,7 @@ import random
 import time
 
 
+
 PAT = regex.compile(r"""'(?:[sdmt]|ll|ve|re)| ?\p{L}+| ?\p{N}+| ?[^\s\p{L}\p{N}]+|\s+(?!\S)|\s+""")
 
 
@@ -236,4 +237,3 @@ if __name__ == "__main__":
     print(f"  **平均吞吐量: {avg_throughput:,.0f} tokens/second**")
     print(f"  平均每条 tokens: {total_tokens / (len(test_texts)*num_runs):.1f}")
     print("=" * 70)
-

@@ -18,6 +18,6 @@ class RMS_norm(nn.Module):
         x = x.to(torch.float32)
         inv_RMS = torch.rsqrt(x.pow(2).mean(dim=-1, keepdim=True) + self.eps)
         x = x * inv_RMS
-        return x.to(origin_type) * self.weight
+        return x.to(origin_type) * self.weight.to(origin_type)
 
 
