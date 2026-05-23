@@ -5,7 +5,7 @@ from typing import Optional, Callable
 
 class AdamW(optim.Optimizer):
     def __init__(self, params, lr: float, betas: tuple[float, float], eps: float, weight_decay: float) -> None:
-        defaults: dict = dict(lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
+        defaults: dict = dict[str, float | tuple[float, float]](lr=lr, betas=betas, eps=eps, weight_decay=weight_decay)
         super().__init__(params, defaults)
     
     def step(self, closure: Optional[Callable] = None):

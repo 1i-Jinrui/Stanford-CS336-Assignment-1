@@ -41,5 +41,4 @@ class MultiheadSelfAttentionWithRope(nn.Module):
         attn = attn.masked_fill(self.causal_mask[:seq_len, :seq_len] == 0, -float('inf'))
         attn_score = softmax(attn, dim=-1)
         out = torch.matmul(attn_score, v).permute(0, 2, 1, 3).contiguous().view(batch_size, seq_len, self.d_model)
-
         return self.Wo(out)

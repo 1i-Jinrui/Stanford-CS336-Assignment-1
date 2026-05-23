@@ -55,7 +55,7 @@ class Tokenizer:
                 break
 
             # 应用最佳合并对
-            merged_token = best_pair[0] + best_pair[1]
+            merged_token = best_pair[0] + best_pair[1] # 这里是拼接两个字节，而非直接相加
             new_parts = []
             i = 0
             while i < len(parts):
@@ -91,6 +91,8 @@ class Tokenizer:
             else:
                 # 如果chunk是普通文本，使用BPE算法处理
                 # 使用finditer，防止长文本造成OOM
+                # finditer 返回一个迭代器，每次返回一个match对象,
+                # 常用方法有：match.group()获取匹配到的文本;match.start()获取匹配开始的位置;match.end()获取匹配结束的位置。
                 for match in PAT.finditer(chunk):
                     word = match.group()
 

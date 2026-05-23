@@ -8,8 +8,24 @@ __pycache__/
 # 3. 忽略 PyCharm 的本地编辑器配置
 .idea/
 
-# 4. 忽略 CS336 作业里庞大的数据集（防止把没用的 txt 传上去导致超载）
+# 4. 忽略 CS336 作业数据集
 cs336_basics/data/
+
+# 5. 忽略训练产物与实验输出
+cs336_basics/Train_Module/checkpoints/
+*.pt
+*.pth
+*.ckpt
+*.log
+*.csv
+
+# 6. 暂不上传个人笔记
+video_lecture1.md
+video_lecture2.md
+video_lecture3.md
+video_lecture4.md
+cs336_basics/LLM_Module/NOTE.md
+cs336_basics/utils/note.md
 
 tests/
 

@@ -228,7 +228,7 @@ def _get_token_freq_parallel(input_path: str, special_tokens: list[str], num_wor
             chunk_bytes = futures[future]
             chunk_table = future.result()
 
-            total_freq_table.update(chunk_table)
+            total_freq_table.update(chunk_table) # 累加
             pbar.update(chunk_bytes)
 
     return total_freq_table
@@ -374,7 +374,7 @@ def train_bpe(input_path: str | os.PathLike,
 
     # 2. 保存 Merges 为 TXT 文件
     with open("merges.txt", "w", encoding="utf-8") as f:
-        # 第一行通常写一个版本号标识，Hugging Face 的 merges.txt 通常包含这行
+        # 写一个版本号标识
         f.write("# version: 0.2\n")
         for pair in merges:
             part1 = pair[0].decode('utf-8', errors='backslashreplace')
@@ -392,7 +392,7 @@ def train_bpe(input_path: str | os.PathLike,
 
 if __name__ == "__main__":
     special_tokens = ["<|endoftext|>"]
-    vocab_result, merges_result = train_bpe("../data/owt_train.txt", 32000, special_tokens)
+    vocab_result, merges_result = train_bpe("../data/TinyStoriesV2-GPT4-train.txt", 10000, special_tokens)
 
     print(f"Vocab size: {len(vocab_result)}")
     print(f"Merges count: {len(merges_result)}")

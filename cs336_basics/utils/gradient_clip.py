@@ -3,8 +3,8 @@ from typing import Iterable
 
 class GradientClipper:
 
-    def __init__(self, params: Iterable[torch.nn.Parameter], max_l2_norm: float, eps=1e-6):
-        self.params = params
+    def __init__(self, params: Iterable[torch.nn.Parameter], max_l2_norm: float, eps: float = 1e-6):
+        self.params = list(params)
         self.max_l2_norm = max_l2_norm
         self.eps = eps
 
