@@ -9,10 +9,11 @@ __pycache__/
 .idea/
 
 # 4. 忽略 CS336 作业数据集
-cs336_basics/data/
+Assignment-1/cs336_basics/data/
+Assignment-4/local-shared-data/
 
 # 5. 忽略训练产物与实验输出
-cs336_basics/Train_Module/checkpoints/
+Assignment-1/cs336_basics/Train_Module/checkpoints/
 *.pt
 *.pth
 *.ckpt
@@ -24,10 +25,16 @@ video_lecture1.md
 video_lecture2.md
 video_lecture3.md
 video_lecture4.md
-cs336_basics/LLM_Module/NOTE.md
-cs336_basics/utils/note.md
+video_lecture13.md
+video_lecture14.md
+Assignment-1/cs336_basics/LLM_Module/NOTE.md
+Assignment-1/cs336_basics/utils/note.md
+Assignment-4/cs336_data/NOTE.md
+Assignment-4/cs336_data/quality_classify/Note.md
+Assignment-4/cs336_data/Non-assignment content/
 
-tests/
+Assignment-1/tests/
+Assignment-4/tests/
 
 第一章完整版v1.pdf
 
