@@ -3,11 +3,11 @@
 # 数据与 tokenizer 文件路径
 # ------------------------------------------------------------
 
-train_data_path: "../data/TinyStoriesV2-GPT4-train.txt"
-valid_data_path: "../data/TinyStoriesV2-GPT4-valid.txt"
+train_data_path: "../data/owt_train.txt"
+valid_data_path: "../data/owt_valid.txt"
 
-vocab_path: "../bpe/tyst_vocab.json"
-merges_path: "../bpe/tyst_merges.txt"
+vocab_path: "../bpe/owt_vocab.json"
+merges_path: "../bpe/owt_merges.txt"
 
 # ------------------------------------------------------------
 # checkpoint 相关参数
@@ -19,7 +19,7 @@ output_dir: "./checkpoints"
 resume_from: null
 
 # 推理/验证时加载的 checkpoint
-checkpoint_path: "./checkpoints/d512_l4_h16_ctx256_bs128_lr1e-03_seed42/checkpoint_final.pt"
+checkpoint_path: "./checkpoints/owt/d512_l4_h16_ctx512_bs32_lr1e-03_seed42_30000step/checkpoint_final.pt"
 
 # ------------------------------------------------------------
 # 设备设置
@@ -33,8 +33,8 @@ seed: 42
 # ------------------------------------------------------------
 
 model:
-  vocab_size: 10000
-  context_length: 256
+  vocab_size: 32000
+  context_length: 512
   d_model: 512
   num_layers: 4
   num_heads: 16
@@ -46,9 +46,9 @@ model:
 # ------------------------------------------------------------
 
 training:
-  batch_size: 64
-  max_iters: 10000
-  warmup_iters: 1000
+  batch_size: 32
+  max_iters: 30000
+  warmup_iters: 2000
 
 # ------------------------------------------------------------
 # AdamW 优化器与学习率参数
@@ -89,7 +89,7 @@ max_eval_batches: null
 
 prompt: "On a quiet coast, there stood a small lighthouse"
 
-# 作业要求至少生成 256 tokens 或直到 <|endoftext|>
+# 至少生成 256 tokens 或直到 <|endoftext|>
 max_new_tokens: 512
 
 # 越低越保守，越高越随机

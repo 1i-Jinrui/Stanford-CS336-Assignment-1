@@ -1,44 +1,127 @@
-# 1. 忽略 uv 创建的虚拟环境
+# 1. 忽略 Python 环境、缓存与解释器相关文件
 .venv/
-
-# 2. 忽略 Python 运行时的缓存文件
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
+.python-version
+.pdm.toml
+__pypackages__/
 
-# 3. 忽略 PyCharm 的本地编辑器配置
+# 2. 忽略本地 IDE、系统与导航文件
 .idea/
+nav
+tags
+.spyderproject
+.spyproject
+.ropeproject
+*.DS_Store
 
-# 4. 忽略 CS336 作业数据集
+# 3. 忽略 CS336 作业数据集
 Assignment-1/cs336_basics/data/
 Assignment-4/local-shared-data/
 
-# 5. 忽略训练产物与实验输出
+# 4. 忽略训练产物、模型权重与实验输出
 Assignment-1/cs336_basics/Train_Module/checkpoints/
+Assignment-5/**/checkpoint_best_step_*/
+Assignment-5/**/best_model/
+models/
 *.pt
 *.pth
 *.ckpt
+*.bin
 *.log
 *.csv
+*.json
+*.pkl
+*.txt
 
-# 6. 暂不上传个人笔记
+# 5. 忽略 Python 打包、构建与发布产物
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.manifest
+*.spec
+*.so
+
+# 6. 忽略测试、覆盖率与静态分析缓存
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+cython_debug/
+.pybuilder/
+target/
+
+# 7. 忽略常见 Web / 文档 / Notebook 生成文件
+instance/
+.webassets-cache
+.scrapy
+docs/_build/
+.ipynb_checkpoints
+profile_default/
+ipython_config.py
+/site
+
+# 8. 忽略本地数据库、配置与任务调度文件
+local_settings.py
+db.sqlite3
+db.sqlite3-journal
+.env
+celerybeat-schedule
+celerybeat.pid
+pip-log.txt
+pip-delete-this-directory.txt
+
+# 9. 忽略国际化与特殊工具生成文件
+*.mo
+*.pot
+*.sage.py
+
+# 10. 暂不上传个人笔记与本地资料
 video_lecture1.md
 video_lecture2.md
 video_lecture3.md
 video_lecture4.md
 video_lecture13.md
 video_lecture14.md
-Assignment-1/cs336_basics/LLM_Module/NOTE.md
-Assignment-1/cs336_basics/utils/note.md
-Assignment-4/cs336_data/NOTE.md
-Assignment-4/cs336_data/quality_classify/Note.md
 Assignment-4/cs336_data/Non-assignment content/
-
-Assignment-1/tests/
-Assignment-4/tests/
-
 第一章完整版v1.pdf
 
-
-*.json
-*.pkl
-*.txt
+# 11. 忽略本地测试目录
+Assignment-1/tests/
+Assignment-4/tests/
+Assignment-5/tests/
