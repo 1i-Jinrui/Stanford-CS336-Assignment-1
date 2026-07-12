@@ -1,0 +1,39 @@
+4090可训练参数
+python SFT_experiment.py \
+  --device cuda:0 \
+  --num_epochs 1 \
+  --total_batch_size 128 \
+  --micro_batch_size 1 \
+  --learning_rate 1e-4 \
+  --eval_interval 8 \
+  --checkpoint_interval 8 \
+  --max_val_examples 1000 \
+  --val_batch_size 1 \
+  --vllm_gpu_memory_utilization 0.2 \
+  --vllm_max_model_len 2048 \
+  --vllm_max_num_seqs 16 \
+  --attention_type flash_attention_2 \
+  --per_token_loss
+
+  filtered_experiment
+python SFT_experiment.py \
+  --model_path /root/autodl-tmp/Assignment-5/cs336_alignment/models/Qwen2.5-Math-1.5B \
+  --train_file /root/autodl-tmp/Assignment-5/MATH/train_filtered.jsonl \
+  --val_file /root/autodl-tmp/Assignment-5/MATH/val.jsonl \
+  --output_dir /root/autodl-tmp/Assignment-5/outputs/sft_train_filtered_per_token_loss \
+  --device cuda:0 \
+  --num_epochs 1 \
+  --total_batch_size 128 \
+  --micro_batch_size 1 \
+  --learning_rate 1e-4 \
+  --grad_norm_clip 1.0 \
+  --eval_interval 8 \
+  --checkpoint_interval 8 \
+  --max_val_examples 1000 \
+  --val_batch_size 1 \
+  --vllm_gpu_memory_utilization 0.2 \
+  --vllm_max_model_len 2048 \
+  --vllm_max_num_seqs 16 \
+  --attention_type flash_attention_2 \
+  --per_token_loss \
+  --max_steps 40
